@@ -60,7 +60,7 @@ class DatabasePromise {
         instance.connection.connect(function(error, result, fields) {
             
             if(error) {
-                reject(this.error(`Error connecting: ${error}`));
+                reject(instance.error(`Error connecting: ${error}`));
             }
             else {
                 let finalRows = [];
