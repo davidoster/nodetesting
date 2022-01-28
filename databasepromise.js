@@ -13,20 +13,36 @@ connectionConnect():
 
 */
 var mysql = require("mysql2");
+
+let resolveFunction = function() { return {} };
+let rejectFunction  = function() { return {} };
+class MyPromise {
+    constructor(resolve, reject, instanceOfDBPromise) {
+        this.resolve = resolve;
+        this.reject = reject;
+        this.instanceOfDBPromise = instanceOfDBPromise;
+    }
+    execute = (value) => {
+        let iMyPromise = this;
+        let promiseResult = new Promise(function(resolve, reject) {
+            value(resolve, reject, iMyPromise.instanceOfDBPromise) // initializeConnection()
+        });
+        return(promiseResult);
+    }
+}
+
+let aPromise = new MyPromise(resolveFunction, rejectFunction);
+
+
+
 class DatabasePromise {
 
     constructor(configDetails, query) {
         this.configDetails = configDetails;
         this.query = query;
-        this.resolve = null;
-        this.reject = null;
+        this.resolve = this.sqlQuery;
+        this.reject = this.error;
         this._connection = null;
-        // this.promise = new Promise(this.resolve, this.reject);
-        // this.initializeConnection.bind(this);
-        // inside Promise
-            this.initializeConnection();
-        // end of Promise
-        
     }
 
     get connection(){
@@ -35,52 +51,48 @@ class DatabasePromise {
 
     set connection(connection) {
         this._connection = connection;
-        console.log(this._connection);
+        // console.log(this._connection);
     }
 
-    initializeConnection() {
-        this.connection = mysql.createConnection(this.configDetails);
-        // console.log(this._connection);
-        this.connection.connect(function(error, result, fields) {
+    initializeConnection(resolve, reject, instance) {
+        instance.connection = mysql.createConnection(instance.configDetails);
+        // console.log(`inst/connection: ${instance}`);
+        instance.connection.connect(function(error, result, fields) {
             
             if(error) {
-                console.log(`Error connecting: ${error}`);
+                reject(this.error(`Error connecting: ${error}`));
             }
             else {
                 let finalRows = [];
-                console.log("Connected!");
-                
-                this.connection.query(this.query, (err, rows, fields) => {
-                    if (err) {
-                        console.log("Error in sql query");
-                    }
-                    finalRows = rows;
-                    console.log(finalRows);
-                });
-                this.connection.end();
+                // console.log("Connected!");
+                resolve(instance.sqlQuery(instance.connection, instance.query, reject));
+                instance.connection.end();
             }
         });
-        
     }
 
-    // connectionConnect(error, result, fields) {
-    //     if(error) {
-    //         console.log(`Error connecting: ${error}`);
-    //     }
-    //     else {
-    //         let finalRows = [];
-    //         console.log("Connected!");
-            
-    //         this.connection.query(this.query, (err, rows, fields) => {
-    //             if (err) {
-    //                 console.log("Error in sql query");
-    //             }
-    //             finalRows = rows;
-    //             console.log(finalRows);
-    //         });
-    //         this.connection.end();
-    //     }
-    // }
+    sqlQuery(connection, query, reject) {
+        let result = connection.query(query, (err, rows, fields) => {
+            if (err) {
+                reject(this.error("Error in sql query"));
+            }
+            finalRows = rows;
+            console.log(finalRows);
+        });
+        return(result);
+    }
+
+    error(value) {
+        return(value);
+    }
+
+    results() {
+        // inside Promise
+        // console.log(this);
+        this.promise = new MyPromise(this.resolve, this.reject, this);
+        return(this.promise.execute(this.initializeConnection));
+        // end of Promise
+    }
 }
 
 module.exports = { DatabasePromise }
@@ -96,4 +108,6 @@ let remote_dbhost = {
 };
 let query = "SELECT * FROM `cb12ptjs`.`customer`;";
 let myDatabasePromise = new DatabasePromise(remote_dbhost, query);
-// console.log(myDatabasePromise.results());
+let dbPromise = myDatabasePromise.results();
+dbPromise.then(resolve => { console.log(resolve); });
+
