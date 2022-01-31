@@ -8,32 +8,23 @@ methods:
 initializeConnection():
 initializePromise(): 
 connectionConnect():
-
-
-
 */
-var mysql = require("mysql2");
 
-let resolveFunction = function() { return {} };
-let rejectFunction  = function() { return {} };
+var mysql = require("mysql2");
 class MyPromise {
     constructor(resolve, reject, instanceOfDBPromise) {
         this.resolve = resolve;
         this.reject = reject;
         this.instanceOfDBPromise = instanceOfDBPromise;
     }
-    execute = (value) => {
+    execute = async (value) => {
         let iMyPromise = this;
+        let results = null;
         let promiseResult = new Promise(function(resolve, reject) {
-            value(resolve, reject, iMyPromise.instanceOfDBPromise) // initializeConnection()
+            value(resolve, reject, iMyPromise.instanceOfDBPromise); // initializeConnection()
         });
-        return(promiseResult);
     }
 }
-
-let aPromise = new MyPromise(resolveFunction, rejectFunction);
-
-
 
 class DatabasePromise {
 
@@ -43,6 +34,7 @@ class DatabasePromise {
         this.resolve = this.sqlQuery;
         this.reject = this.error;
         this._connection = null;
+        this.dbResults = null;
     }
 
     get connection(){
@@ -51,33 +43,31 @@ class DatabasePromise {
 
     set connection(connection) {
         this._connection = connection;
-        // console.log(this._connection);
     }
 
     initializeConnection(resolve, reject, instance) {
         instance.connection = mysql.createConnection(instance.configDetails);
-        // console.log(`inst/connection: ${instance}`);
         instance.connection.connect(function(error, result, fields) {
-            
             if(error) {
                 reject(instance.error(`Error connecting: ${error}`));
             }
             else {
-                let finalRows = [];
-                // console.log("Connected!");
-                resolve(instance.sqlQuery(instance.connection, instance.query, reject));
-                instance.connection.end();
+                instance.dbResults = instance.sqlQuery(instance.connection, instance.query);
+                resolve(instance.dbResults);
+                return(instance.dbResults);
             }
         });
     }
 
-    sqlQuery(connection, query, reject) {
+    sqlQuery(connection, query) {
         let result = connection.query(query, (err, rows, fields) => {
             if (err) {
-                reject(this.error("Error in sql query"));
+                return(this.error(`Error in sql query: ${err}`));
+            } else {
+                console.log(rows);
+                connection.end();
+                return(rows);
             }
-            finalRows = rows;
-            console.log(finalRows);
         });
         return(result);
     }
@@ -88,9 +78,9 @@ class DatabasePromise {
 
     results() {
         // inside Promise
-        // console.log(this);
         this.promise = new MyPromise(this.resolve, this.reject, this);
-        return(this.promise.execute(this.initializeConnection));
+        let r = this.promise.execute(this.initializeConnection);
+        return(r);
         // end of Promise
     }
 }
@@ -108,6 +98,4 @@ let remote_dbhost = {
 };
 let query = "SELECT * FROM `cb12ptjs`.`customer`;";
 let myDatabasePromise = new DatabasePromise(remote_dbhost, query);
-let dbPromise = myDatabasePromise.results();
-dbPromise.then(resolve => { console.log(resolve); });
-
+myDatabasePromise.results();
